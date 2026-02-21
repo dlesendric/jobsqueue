@@ -14,27 +14,56 @@ declare(strict_types=1);
 namespace ActiveCollab\JobsQueue\Test\Base;
 
 use ActiveCollab\DatabaseConnection\Connection\MysqliConnection;
-use ActiveCollab\JobsQueue\Queue\MySqlQueue;
 use mysqli;
 use RuntimeException;
 
 class IntegratedConnectionTestCase extends TestCase
 {
+    protected static mysqli $static_link;
     protected mysqli $link;
     protected MysqliConnection $connection;
+    protected static array $tables_to_truncate = [];
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+
+        $host = getenv('DB_HOST') ?: 'localhost';
+        $user = getenv('DB_USER') ?: 'root';
+        $pass = getenv('DB_PASS') ?: '';
+        $name = getenv('DB_NAME') ?: 'activecollab_jobs_queue_test';
+
+        self::$static_link = new mysqli($host, $user, $pass, $name);
+
+        if (self::$static_link->connect_error) {
+            throw new RuntimeException('Failed to connect to database. MySQL said: ' . self::$static_link->connect_error);
+        }
+    }
 
     public function setUp(): void
     {
         parent::setUp();
 
-        $this->link = new mysqli('localhost', 'root', '', 'activecollab_jobs_queue_test');
+        $host = getenv('DB_HOST') ?: 'localhost';
+        $user = getenv('DB_USER') ?: 'root';
+        $pass = getenv('DB_PASS') ?: '';
+        $name = getenv('DB_NAME') ?: 'activecollab_jobs_queue_test';
+
+        $this->link = new mysqli($host, $user, $pass, $name);
 
         if ($this->link->connect_error) {
             throw new RuntimeException('Failed to connect to database. MySQL said: ' . $this->link->connect_error);
         }
 
         $this->connection = new MysqliConnection($this->link);
-        $this->connection->execute('DROP TABLE IF EXISTS `' . MySqlQueue::JOBS_TABLE_NAME . '`');
+
+        // Truncate tables to ensure clean state before each test
+        // This is faster than DROP/CREATE and resets AUTO_INCREMENT
+        foreach (static::$tables_to_truncate as $table) {
+            if (in_array($table, $this->connection->getTableNames())) {
+                $this->connection->execute("TRUNCATE TABLE `{$table}`");
+            }
+        }
     }
 
     protected function tearDown(): void
@@ -42,5 +71,14 @@ class IntegratedConnectionTestCase extends TestCase
         $this->link->close();
 
         parent::tearDown();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (isset(self::$static_link)) {
+            self::$static_link->close();
+        }
+
+        parent::tearDownAfterClass();
     }
 }

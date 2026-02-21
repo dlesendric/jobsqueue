@@ -27,6 +27,35 @@ use ActiveCollab\JobsQueue\Test\Jobs\WebhookUrl;
 
 class ExtractPropertyTest extends IntegratedConnectionTestCase
 {
+    protected static array $tables_to_truncate = [
+        MySqlQueue::BATCHES_TABLE_NAME,
+        MySqlQueue::JOBS_TABLE_NAME,
+        MySqlQueue::FAILED_JOBS_TABLE_NAME,
+    ];
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+
+        // Create tables once for the entire test class
+        $connection = new \ActiveCollab\DatabaseConnection\Connection\MysqliConnection(self::$static_link);
+        $queue = new MySqlQueue($connection);
+        $queue->createTables();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        // Drop tables after all tests in the class have run
+        if (isset(self::$static_link)) {
+            $connection = new \ActiveCollab\DatabaseConnection\Connection\MysqliConnection(self::$static_link);
+            $connection->dropTable(MySqlQueue::BATCHES_TABLE_NAME);
+            $connection->dropTable(MySqlQueue::JOBS_TABLE_NAME);
+            $connection->dropTable(MySqlQueue::FAILED_JOBS_TABLE_NAME);
+        }
+
+        parent::tearDownAfterClass();
+    }
+
     /**
      * Test to confirm that priority is extracted field by default.
      */

@@ -26,6 +26,23 @@ abstract class IntegratedMySqlQueueTest extends IntegratedConnectionTestCase
     protected ?string $last_failed_job = null;
     protected ?string $last_failure_message = null;
 
+    protected static array $tables_to_truncate = [
+        MySqlQueue::BATCHES_TABLE_NAME,
+        MySqlQueue::JOBS_TABLE_NAME,
+        MySqlQueue::FAILED_JOBS_TABLE_NAME,
+        'email_log',
+    ];
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+
+        // Create tables once for the entire test class
+        $connection = new \ActiveCollab\DatabaseConnection\Connection\MysqliConnection(self::$static_link);
+        $queue = new MySqlQueue($connection);
+        $queue->createTables();
+    }
+
     public function setUp(): void
     {
         parent::setUp();
@@ -45,12 +62,24 @@ abstract class IntegratedMySqlQueueTest extends IntegratedConnectionTestCase
 
     protected function tearDown(): void
     {
-        $this->connection->dropTable(MySqlQueue::BATCHES_TABLE_NAME);
-        $this->connection->dropTable(MySqlQueue::JOBS_TABLE_NAME);
-        $this->connection->dropTable(MySqlQueue::FAILED_JOBS_TABLE_NAME);
-        $this->connection->dropTable('email_log');
-
+        // No need to drop tables - transaction rollback handles cleanup
         parent::tearDown();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        // Drop tables after all tests in the class have run
+        if (isset(self::$static_link)) {
+            $connection = new \ActiveCollab\DatabaseConnection\Connection\MysqliConnection(self::$static_link);
+            $connection->dropTable(MySqlQueue::BATCHES_TABLE_NAME);
+            $connection->dropTable(MySqlQueue::JOBS_TABLE_NAME);
+            $connection->dropTable(MySqlQueue::FAILED_JOBS_TABLE_NAME);
+            if (in_array('email_log', $connection->getTableNames())) {
+                $connection->dropTable('email_log');
+            }
+        }
+
+        parent::tearDownAfterClass();
     }
 
     /**
